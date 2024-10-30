@@ -1,35 +1,39 @@
 import numpy as np
-import asyncio
+import multiprocessing as mp
 
-async def gaussian_elimination(A, b):
+def eliminate_row(Ab, i, j):
+    """Функция для параллельного вычисления одной строки в прямом ходе"""
+    factor = Ab[j, i] / Ab[i, i]
+    Ab[j, i:] -= factor * Ab[i, i:]
+    return j, Ab[j]  # Возвращаем индекс строки и её новое значение
+
+def gaussian_elimination_parallel(A, b):
     n = len(b)
     # Объединяем матрицу A и вектор b в расширенную матрицу
     Ab = np.hstack([A, b.reshape(-1, 1)])
 
-    # Прямой ход
+    # Прямой ход с использованием multiprocessing.Pool
     for i in range(n):
         # Нормализуем строку с максимальным элементом
         max_row_index = np.argmax(np.abs(Ab[i:, i])) + i
         Ab[[i, max_row_index]] = Ab[[max_row_index, i]]
-
-        # Приведение к треугольной форме
-        for j in range(i + 1, n):
-            factor = Ab[j, i] / Ab[i, i]
-            Ab[j, i:] -= factor * Ab[i, i:]
         
-        # Асинхронная пауза для параллельного выполнения других задач
-        await asyncio.sleep(0)
+        # Создаем пул процессов
+        with mp.Pool(processes=mp.cpu_count()) as pool:
+            # Параллельное выполнение для строк ниже текущей строки i
+            results = pool.starmap(eliminate_row, [(Ab, i, j) for j in range(i + 1, n)])
+        
+            # Обновляем строки матрицы с параллельных результатов
+            for j, row in results:
+                Ab[j] = row
 
-    # Обратный ход
+    # Обратный ход без параллельных вычислений
     x = np.zeros(n)
     for i in range(n - 1, -1, -1):
         x[i] = Ab[i, -1]  # Начинаем с последнего столбца
         for j in range(i + 1, n):
             x[i] -= Ab[i, j] * x[j]
         x[i] /= Ab[i, i]
-        
-        # Асинхронная пауза для параллельного выполнения других задач
-        await asyncio.sleep(0)
 
     return x
 
@@ -42,10 +46,6 @@ A = np.array([
 
 b = np.array([14.0, 10.0, 32.0])
 
-# Функция для запуска асинхронной задачи
-async def main():
-    solution = await gaussian_elimination(A, b)
-    print("Решение СЛАУ:", np.round(solution, decimals=6))
-
-# Запуск асинхронной задачи
-asyncio.run(main())
+# Запускаем параллельное решение
+solution = gaussian_elimination_parallel(A, b)
+print("Решение СЛАУ:", np.round(solution, decimals=6))
