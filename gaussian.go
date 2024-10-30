@@ -3,8 +3,19 @@ package main
 import (
 	"fmt"
 	"math"
-	"time"
+	"sync"
 )
+
+func eliminateRow(Ab [][]float64, i int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	n := len(Ab)
+	for j := i + 1; j < n; j++ {
+		factor := Ab[j][i] / Ab[i][i]
+		for k := i; k <= n; k++ {
+			Ab[j][k] -= factor * Ab[i][k]
+		}
+	}
+}
 
 func gaussianElimination(A [][]float64, b []float64, result chan []float64) {
 	n := len(b)
@@ -29,16 +40,12 @@ func gaussianElimination(A [][]float64, b []float64, result chan []float64) {
 		// Переставляем строки
 		Ab[i], Ab[maxRowIndex] = Ab[maxRowIndex], Ab[i]
 
-		// Приведение к треугольной форме
+		var wg sync.WaitGroup
 		for j := i + 1; j < n; j++ {
-			factor := Ab[j][i] / Ab[i][i]
-			for k := i; k <= n; k++ {
-				Ab[j][k] -= factor * Ab[i][k]
-			}
+			wg.Add(1)
+			go eliminateRow(Ab, i, &wg)
 		}
-
-		// Асинхронная пауза (имитация)
-		time.Sleep(10 * time.Millisecond)
+		wg.Wait() // Ждем завершения всех горутин
 	}
 
 	// Обратный ход
@@ -49,9 +56,6 @@ func gaussianElimination(A [][]float64, b []float64, result chan []float64) {
 			x[i] -= Ab[i][j] * x[j]
 		}
 		x[i] /= Ab[i][i]
-
-		// Асинхронная пауза (имитация)
-		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Отправляем результат через канал
