@@ -2,12 +2,23 @@
 #include <vector>
 #include <cmath>
 #include <thread>
+#include <mutex>
 #include <chrono>
 
 using namespace std;
 
-// Функция для выполнения метода Гаусса
-vector<double> gaussianElimination(vector<vector<double>>& A, vector<double>& b) {
+mutex mtx;  // Мьютекс для синхронизации вывода и доступа к данным
+
+// Функция для приведения строки к треугольной форме параллельно
+void rowElimination(vector<vector<double>>& Ab, int i, int j, int n) {
+    double factor = Ab[j][i] / Ab[i][i];
+    for (int k = i; k <= n; ++k) {
+        Ab[j][k] -= factor * Ab[i][k];
+    }
+}
+
+// Функция для выполнения метода Гаусса с параллельной обработкой
+vector<double> gaussianEliminationParallel(vector<vector<double>>& A, vector<double>& b) {
     int n = b.size();
     // Создаем расширенную матрицу Ab
     vector<vector<double>> Ab(n, vector<double>(n + 1));
@@ -33,12 +44,15 @@ vector<double> gaussianElimination(vector<vector<double>>& A, vector<double>& b)
         // Переставляем строки
         swap(Ab[i], Ab[maxRowIndex]);
 
-        // Приведение к треугольной форме
+        // Параллельное приведение к треугольной форме
+        vector<thread> threads;
         for (int j = i + 1; j < n; ++j) {
-            double factor = Ab[j][i] / Ab[i][i];
-            for (int k = i; k <= n; ++k) {
-                Ab[j][k] -= factor * Ab[i][k];
-            }
+            threads.emplace_back(rowElimination, ref(Ab), i, j, n);
+        }
+
+        // Ожидание завершения всех потоков
+        for (auto& th : threads) {
+            th.join();
         }
 
         // Имитация асинхронной паузы
@@ -72,14 +86,16 @@ int main() {
     vector<double> b = {12.0, -25.0, 20.0};
 
     // Решение системы
-    vector<double> solution = gaussianElimination(A, b);
+    vector<double> solution = gaussianEliminationParallel(A, b);
 
     // Выводим результат
+    mtx.lock();  // Блокируем вывод для синхронизации
     cout << "Решение СЛАУ: ";
     for (double val : solution) {
         cout << val << " ";
     }
     cout << endl;
+    mtx.unlock();  // Разблокируем вывод
 
     return 0;
 }
