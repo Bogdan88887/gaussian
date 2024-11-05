@@ -4,6 +4,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <fstream>  // Для работы с файлами
 
 using namespace std;
 
@@ -75,15 +76,47 @@ vector<double> gaussianEliminationParallel(vector<vector<double>>& A, vector<dou
     return x;
 }
 
-int main() {
-    // Задаем матрицу A и вектор b
-    vector<vector<double>> A = {
-        {4.0, -2.0, 1.0},
-        {3.0, 6.0, -4.0},
-        {2.0, 1.0, 8.0}
-    };
+// Функция для чтения матрицы и вектора из файла
+void readMatrixFromFile(const string& filename, vector<vector<double>>& A, vector<double>& b) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "Ошибка: не удалось открыть файл " << filename << endl;
+        return;
+    }
 
-    vector<double> b = {12.0, -25.0, 20.0};
+    double value;
+    vector<double> row;
+    int rowCount = 0; // Счетчик строк матрицы A
+
+    // Чтение матрицы A
+    while (file >> value) {
+        if (rowCount < 3) { // Предполагаем, что у нас 3 строки в A
+            row.push_back(value);
+            if (row.size() == 3) { // 3 значения для каждой строки
+                A.push_back(row);
+                row.clear();
+                rowCount++;
+            }
+        } else {
+            b.push_back(value); // Все оставшиеся значения идут в b
+        }
+    }
+
+    file.close();
+}
+
+int main() {
+    vector<vector<double>> A;  // Инициализируем пустую матрицу A
+    vector<double> b;          // Инициализируем пустой вектор b
+
+    // Чтение матрицы и вектора из файла
+    readMatrixFromFile("matrix.txt", A, b);
+
+    // Проверяем, что данные успешно считаны
+    if (A.empty() || b.empty()) {
+        cerr << "Ошибка: матрица или вектор b пусты." << endl;
+        return 1;
+    }
 
     // Решение системы
     vector<double> solution = gaussianEliminationParallel(A, b);
